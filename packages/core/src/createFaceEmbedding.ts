@@ -18,7 +18,14 @@ export async function createFaceEmbedding(input: FaceInput, options: CreateEmbed
   if (analysis.faceCount === 0) throw new FaceVerificationError("NO_FACE_DETECTED", "No face was detected.");
   if (analysis.faceCount > 1) throw new FaceVerificationError("MULTIPLE_FACES_DETECTED", "Exactly one face is required.");
   const quality = calculateFaceQuality(canvas, analysis, options.quality);
-  if (options.qualityCheck && !quality.acceptable) throw new FaceVerificationError("FACE_QUALITY_TOO_LOW", "Face quality is too low.", true, { issues: quality.issues });
+  if (options.qualityCheck && !quality.acceptable) {
+    throw new FaceVerificationError(
+      "FACE_QUALITY_TOO_LOW",
+      `Face quality is too low: ${quality.issues.join(", ").replaceAll("_", " ").toLowerCase()}.`,
+      true,
+      { issues: quality.issues, quality },
+    );
+  }
   const aligned = alignFace(canvas, analysis.keyLandmarks);
   const cropped = cropFace(aligned, analysis.boundingBox, options.cropPadding);
   const tensor = preprocessFace(cropped, models.preprocess);

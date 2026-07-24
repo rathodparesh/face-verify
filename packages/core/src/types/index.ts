@@ -33,6 +33,7 @@ export interface InitializeFaceModelsOptions {
   faceLandmarkerModelUrl: string;
   embeddingModelUrl: string;
   wasmFilesUrl?: string;
+  onnxWasmFilesUrl?: string;
   delegate?: InferenceDelegate;
   preprocess?: Partial<EmbeddingPreprocessOptions>;
   modelName?: string;

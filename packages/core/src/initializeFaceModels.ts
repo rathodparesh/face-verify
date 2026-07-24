@@ -21,6 +21,7 @@ export async function initializeFaceModels(options: InitializeFaceModelsOptions)
   if (pending) return pending;
   const notify = (next: ModelProgress) => { progress = next; options.onProgress?.(next); };
   pending = (async () => {
+    let loadingAsset = "MediaPipe WASM runtime";
     try {
       notify({ stage: "loading_vision", progress: 0.1 });
       const fileset = await FilesetResolver.forVisionTasks(options.wasmFilesUrl ?? "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm");
@@ -28,11 +29,18 @@ export async function initializeFaceModels(options: InitializeFaceModelsOptions)
       const gpuAvailable = typeof navigator !== "undefined" && "gpu" in navigator;
       if (delegate === "webgpu" && !gpuAvailable) throw new FaceVerificationError("WEBGPU_NOT_AVAILABLE", "WebGPU is not available.");
       const backend: InferenceDelegate = delegate === "auto" ? (gpuAvailable ? "webgpu" : "wasm") : delegate;
+      loadingAsset = `Face Landmarker model at ${options.faceLandmarkerModelUrl}`;
       const landmarker = await FaceLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: options.faceLandmarkerModelUrl, delegate: backend === "webgpu" ? "GPU" : "CPU" },
         runningMode: "IMAGE", numFaces: 2, minFaceDetectionConfidence: 0.5,
       });
       notify({ stage: "loading_embedding", progress: 0.55 });
+      loadingAsset = `ONNX embedding model at ${options.embeddingModelUrl}`;
+      if (options.onnxWasmFilesUrl) {
+        ort.env.wasm.wasmPaths = options.onnxWasmFilesUrl.endsWith("/")
+          ? options.onnxWasmFilesUrl
+          : `${options.onnxWasmFilesUrl}/`;
+      }
       const embeddingSession = await ort.InferenceSession.create(options.embeddingModelUrl, {
         executionProviders: backend === "webgpu" ? ["webgpu", "wasm"] : ["wasm"],
       });
@@ -42,7 +50,12 @@ export async function initializeFaceModels(options: InitializeFaceModelsOptions)
     } catch (error) {
       notify({ stage: "error", progress: 0 });
       if (error instanceof FaceVerificationError) throw error;
-      throw new FaceVerificationError("MODEL_LOAD_FAILED", "One or more face models could not be loaded.", false, { cause: String(error) });
+      throw new FaceVerificationError(
+        "MODEL_LOAD_FAILED",
+        `${loadingAsset} could not be loaded. Confirm that the file exists, is non-empty, and is served with the correct content type.`,
+        false,
+        { asset: loadingAsset, cause: error instanceof Error ? error.message : String(error) },
+      );
     } finally { pending = undefined; }
   })();
   return pending;
